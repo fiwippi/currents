@@ -11,7 +11,7 @@ Your audio device must:
 ## Usage
 ### Arduino
 1. Build an Arduino according to the specification [here](https://www.makeuseof.com/tag/connect-led-light-strips-arduino/) and use a WS2812B LED strip
-2. Load the prorgam from ./arduino/led/led.ino onto your arduino (modify it if you need to change data pin/led type/number of leds)
+2. Load the program from ./arduino/led/led.ino onto your arduino (modify it if you need to change data pin/led type/number of leds)
 
 ### GUI
 1. Clone the repo using `git clone https://github.com/fiwippi/currents.git`
