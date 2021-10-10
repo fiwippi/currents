@@ -20,4 +20,4 @@ Your audio device must:
 4. Select this virtual audio cable when running currents
 
 ## License
-`MIT`
+`BSD-3-Clause`
