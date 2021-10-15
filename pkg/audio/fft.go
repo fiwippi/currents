@@ -17,7 +17,6 @@ import (
 var ErrChannelNum = errors.New("channel number is unsupported")
 var ErrSampleRate = errors.New("sample rate is unsupported")
 
-// TODO only 1 can be used and another 1 should be recretead because channels are closed
 type FFT struct {
 	buffer    *bytes.Buffer // Writer the captured audio should be written to
 	abortChan chan error    // Tells FFT to stop processing input on its writer

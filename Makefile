@@ -1,5 +1,5 @@
-build-windows:
+build:
 	go build -ldflags="-H windowsgui" -o bin/currents.exe
 
-build-linux:
-	go build -o bin/currents
+debug:
+	go build -o bin/currents.exe

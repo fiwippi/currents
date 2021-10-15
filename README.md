@@ -15,7 +15,7 @@ Your audio device must:
 
 ### GUI
 1. Clone the repo using `git clone https://github.com/fiwippi/currents.git`
-2. Build the binary `cd currents && make build-windows / make build-linux`
+2. Build the binary `cd currents && make build`
 3. Send the audio you want to visualise to a virtual audio cable (so it can act as a mic)
 4. Select this virtual audio cable when running currents
 

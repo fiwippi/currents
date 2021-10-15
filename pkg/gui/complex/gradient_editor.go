@@ -128,6 +128,7 @@ func (ge *GradientEditor) listWidget(th *material.Theme) layout.Widget {
 			}
 
 		}
+
 		// Check if we need to remove a gradient
 		for i := range ge.removeBtns {
 			if ge.removeBtns[i].Clicked() {
@@ -140,6 +141,9 @@ func (ge *GradientEditor) listWidget(th *material.Theme) layout.Widget {
 				ge.data = append(newData, ge.data[i+1:]...)
 
 				if ge.selected == i {
+					ge.selected = 0
+				}
+				if ge.selected >= len(ge.data) {
 					ge.selected = 0
 				}
 
@@ -247,6 +251,7 @@ func (ge *GradientEditor) editorWidget(th *material.Theme) layout.Widget {
 
 		// Stops sorting colours and changing their position
 		// at the same which causes buggy behaviour
+		// dragging has to be declared outside the label
 		var dragging bool
 	loop:
 		for _, s := range e.positions {
