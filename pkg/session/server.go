@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/lucasb-eyer/go-colorful"
 	"go.bug.st/serial"
@@ -62,18 +63,25 @@ func (s *Server) Disconnect() error {
 }
 
 func (s *Server) SendColour(clr colorful.Color) {
+	// Get components in range 0-255
 	r, g, b := clr.RGB255()
-	s.SendByte(0) // Signal start of new colour
-	s.SendByte(r)
-	s.SendByte(g)
-	s.SendByte(b)
+
+	// Pack the colours into a uint32
+	var total = (uint32(r)) | (uint32(g) << 8) | (uint32(b) << 16)
+
+	// Send over the serial port
+	s.SendString("-1") // Signal start of new colour
+	s.SendString(",")
+	s.SendString(fmt.Sprintf("%d", total))
+	s.SendString(",")
 }
 
-func (s *Server) SendByte(data byte) error {
-	if s.port == nil || s.blackOnly && data != 0 {
+func (s *Server) SendString(data string) error {
+	// TODO removed blackOnly, does it work?
+	if s.port == nil {
 		return nil
 	}
 
-	_, err := s.port.Write([]byte{data})
+	_, err := s.port.Write([]byte(data))
 	return err
 }

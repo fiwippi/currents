@@ -22,12 +22,13 @@ void setup() {
 
 void loop() { 
     EVERY_N_MILLISECONDS( 1 ) { 
-      if(Serial.available() >= 4){
-        byte start = Serial.read();
-        if (start == 0) { // Black colour indicates next colour will be defined
-          byte r = Serial.read();
-          byte g = Serial.read();
-          byte b = Serial.read();
+      if(Serial.available()){
+        int num = Serial.parseInt();
+        if (num == -1) { // Indicates next colour will be defined
+          unsigned long hue = Serial.parseInt();
+          int r = hue & 0xFF;
+          int g = (hue >> 8) & 0xFF;
+          int b = (hue >> 16) & 0xFF;
 
           for( int i = 0; i < NUM_LEDS; i++) {
             leds[i] = CRGB(r, g, b);
