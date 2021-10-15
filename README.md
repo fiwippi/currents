@@ -3,7 +3,7 @@
 Currents changes the colour of your LED lights based on music playing on your device
 
 ## Requirements
-Your audio device must:
+Your audio device must support:
 - 2 Channels
 - 441000 Hz Sample Rate
 - F32 Sound (as specified by Mini Audio)

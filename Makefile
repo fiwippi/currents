@@ -3,3 +3,6 @@ build:
 
 debug:
 	go build -o bin/currents.exe
+
+icon:
+	go-winres simply --icon icon.png
