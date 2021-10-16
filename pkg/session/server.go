@@ -11,8 +11,7 @@ import (
 )
 
 type Server struct {
-	port      serial.Port
-	blackOnly bool
+	port serial.Port
 }
 
 func NewServer() *Server {
@@ -49,9 +48,7 @@ func (s *Server) Connect(port string) error {
 }
 
 func (s *Server) Disconnect() error {
-	s.blackOnly = true
 	defer func() {
-		s.blackOnly = false
 		s.port = nil
 	}()
 
@@ -66,18 +63,14 @@ func (s *Server) SendColour(clr colorful.Color) {
 	// Get components in range 0-255
 	r, g, b := clr.RGB255()
 
-	// Pack the colours into a uint32
-	var total = (uint32(r)) | (uint32(g) << 8) | (uint32(b) << 16)
-
 	// Send over the serial port
-	s.SendString("-1") // Signal start of new colour
-	s.SendString(",")
-	s.SendString(fmt.Sprintf("%d", total))
-	s.SendString(",")
+	s.SendString("-1,") // Signal start of new colour
+	s.SendString(fmt.Sprintf("%d,", r))
+	s.SendString(fmt.Sprintf("%d,", g))
+	s.SendString(fmt.Sprintf("%d,", b))
 }
 
 func (s *Server) SendString(data string) error {
-	// TODO removed blackOnly, does it work?
 	if s.port == nil {
 		return nil
 	}
