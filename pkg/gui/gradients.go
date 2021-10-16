@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/lucasb-eyer/go-colorful"
+
 	"currents/internal/log"
 	"currents/pkg/audio"
 )
@@ -20,20 +22,20 @@ func loadGradients() *audio.Gradients {
 		{audio.MustParseHex("#faf6cb"), 1.0},
 	},
 	)
-	gradients.Add("Smiths", audio.Gradient{
-		{audio.MustParseHex("#ff0202"), 0},
-		{audio.MustParseHex("#ff0202"), 0.1},
-		{audio.MustParseHex("#ff8d00"), 0.3},
-		{audio.MustParseHex("#fff400"), 0.5},
-		{audio.MustParseHex("#f1ff00"), 0.8},
-		{audio.MustParseHex("#A4ff00"), 1.0},
+	gradients.Add("Warm", audio.Gradient{
+		{audio.MustParseHex("#ff0000"), 0},
+		{colorful.Color{R: 0.42745098039215684, G: 0, B: 1}, 0.4265},
 	},
 	)
-	gradients.Add("Weird", audio.Gradient{
-		{audio.MustParseHex("#ff7303"), 0},
-		{audio.MustParseHex("#ff7303"), 0.1},
-		{audio.MustParseHex("#ffa7e1"), 0.5},
-		{audio.MustParseHex("#faf4e6"), 1.0},
+	gradients.Add("Cold", audio.Gradient{
+		{colorful.Color{R: 0, G: 0.8666666666666667, B: 1}, 0},
+		{colorful.Color{R: 0, G: 0.8666666666666667, B: 1}, 1},
+	},
+	)
+	gradients.Add("Jungle", audio.Gradient{
+		{colorful.Color{R: 0, G: 1, B: 0}, 0},
+		{colorful.Color{R: 0.7450980392156863, G: 1, B: 1}, 0.16317015886306763},
+		{colorful.Color{R: 0.7333333333333333, G: 0.3686274509803922, B: 0.3686274509803922}, 0.7785547971725464},
 	},
 	)
 
