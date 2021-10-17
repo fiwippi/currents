@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"math/cmplx"
+	"time"
 
 	"github.com/lucasb-eyer/go-colorful"
 
@@ -53,6 +54,8 @@ type FFT struct {
 	// e.g. from 200 total hues, after 180 hues MaxUsefulFrequency
 	// will take effect
 	UsefulFrequencyHue float64
+	// How often we want to use the values from the audio buffer
+	SampleRate time.Duration
 }
 
 func NewFFT(conf *Config) (*FFT, error) {
@@ -76,7 +79,8 @@ func NewFFT(conf *Config) (*FFT, error) {
 		Damp:               true,
 		DampSliceLen:       4,
 		Smooth:             true,
-		SmoothAlpha:        0.73,
+		SmoothAlpha:        0.65,
+		SampleRate:         75 * time.Millisecond,
 	}
 	go f.start()
 	return f, nil
@@ -102,15 +106,18 @@ func (f *FFT) start() {
 	buf := make([]byte, 0, 1024*8)
 	reader := bufio.NewReader(f.buffer)
 
-	var frequency float64                              // The max frequency of the current buffer
-	var oldFreq float64                                // The max frequency of the previous buffer
-	pastFrequencies := make([]float64, f.DampSliceLen) // Holds past max frequencies
-	pastIndex := 0                                     // Index for pastFrequencies to update the last position without shifting the array
+	var displayFreq float64 // Interpolated frequency displayed on the LED lights
+	var frequency float64   // The max frequency of the current buffer
+	var oldFreq float64     // The max frequency of the previous buffer
+
+	rate := time.NewTicker(f.SampleRate)
+	var update time.Time
 
 	for {
 		select {
 		case err := <-f.abortChan:
 			close(f.Hues)
+			rate.Stop()
 			f.Done <- err
 			return
 		default:
@@ -126,75 +133,78 @@ func (f *FFT) start() {
 				return
 			}
 
-			// Get all the float values for each sample in the input samples
-			monoFrameCount := len(buf) / (channelNum * sampleSizeInBytes) // We mix down the samples into mono so we lose half the frames
-			samples := make([]float32, 0, monoFrameCount)
-			for i := 0; i < len(buf); i += channelNum * sampleSizeInBytes {
-				// Value of th left sample
-				leftBytes := buf[i : i+sampleSizeInBytes]
-				leftBits := binary.LittleEndian.Uint32(leftBytes)
-				leftFloat := math.Float32frombits(leftBits)
+			// Frequency only updated every delta t, colour
+			// updated instantaneously
+			select {
+			case <-rate.C:
+				update = time.Now()
+				// Get all the float values for each sample in the input samples
+				monoFrameCount := len(buf) / (channelNum * sampleSizeInBytes) // We mix down the samples into mono so we lose half the frames
+				samples := make([]float32, 0, monoFrameCount)
+				for i := 0; i < len(buf); i += channelNum * sampleSizeInBytes {
+					// Value of th left sample
+					leftBytes := buf[i : i+sampleSizeInBytes]
+					leftBits := binary.LittleEndian.Uint32(leftBytes)
+					leftFloat := math.Float32frombits(leftBits)
 
-				// Value of the right sample
-				rightBytes := buf[i+sampleSizeInBytes : i+channelNum*sampleSizeInBytes]
-				rightBits := binary.LittleEndian.Uint32(rightBytes)
-				rightFloat := math.Float32frombits(rightBits)
+					// Value of the right sample
+					rightBytes := buf[i+sampleSizeInBytes : i+channelNum*sampleSizeInBytes]
+					rightBits := binary.LittleEndian.Uint32(rightBytes)
+					rightFloat := math.Float32frombits(rightBits)
 
-				// Mix them together
-				mixedFloat := (leftFloat + rightFloat) / float32(channelNum)
-				samples = append(samples, mixedFloat)
-			}
-
-			// Calculate variables used to get the FFT
-			maxInfo := sampleRate / channelNum                  // Reversing the Nyquist–Shannon sampling theorem to see the maximum frequency we are trying to achieve
-			usefulMonoFrameCount := monoFrameCount / channelNum // This is the length the program uses to find the freq with
-			// the highest magnitude, this is half the buffer length because
-			// the FFT is mirrored along the centre, thus only half the length
-			// needs to be used
-			freqBinSize := maxInfo / usefulMonoFrameCount // This represents the difference in frequency between each index of the FFT'd array
-
-			// Perform the FFT on the samples and get the frequency with the largest magnitude
-			fftData := fft.FFTReal(samples)
-
-			var max float64
-			var index int
-
-			// FFT is mirrored so we only need the first half of the samples
-			for i := 0; i < usefulMonoFrameCount; i++ {
-				e := cmplx.Abs(complex128(fftData[i]))
-				if e > max {
-					max = e
-					index = i
+					// Mix them together
+					mixedFloat := (leftFloat + rightFloat) / float32(channelNum)
+					samples = append(samples, mixedFloat)
 				}
+
+				// Calculate variables used to get the FFT
+				maxInfo := sampleRate / channelNum                  // Reversing the Nyquist–Shannon sampling theorem to see the maximum frequency we are trying to achieve
+				usefulMonoFrameCount := monoFrameCount / channelNum // This is the length the program uses to find the freq with
+				// the highest magnitude, this is half the buffer length because
+				// the FFT is mirrored along the centre, thus only half the length
+				// needs to be used
+				freqBinSize := maxInfo / usefulMonoFrameCount // This represents the difference in frequency between each index of the FFT'd array
+
+				// Perform the FFT on the samples and get the frequency with the largest magnitude
+				fftData := fft.FFTReal(samples)
+
+				var max float64
+				var index int
+
+				// FFT is mirrored so we only need the first half of the samples
+				for i := 0; i < usefulMonoFrameCount; i++ {
+					e := cmplx.Abs(complex128(fftData[i]))
+					if e > max {
+						max = e
+						index = i
+					}
+				}
+
+				oldFreq = frequency
+				frequency = math.Min(float64(freqBinSize*index), f.MaxFreq)
+
+				// Smooth if needed
+				if f.Smooth {
+					frequency = (f.SmoothAlpha * oldFreq) + ((1 - f.SmoothAlpha) * frequency)
+				}
+			default:
 			}
 
-			oldFreq = frequency
-			frequency = math.Min(float64(freqBinSize*index), f.MaxFreq)
-
-			// Smooth if needed
-			if f.Smooth {
-				frequency = (f.SmoothAlpha * oldFreq) + ((1 - f.SmoothAlpha) * frequency)
-			}
+			displayFreq = frequency
 
 			// Damp if needed
 			if f.Damp {
-				pastFrequencies[pastIndex] = frequency
-				pastIndex += 1
-				pastIndex = pastIndex % len(pastFrequencies)
-
-				var total float64
-				for _, v := range pastFrequencies {
-					total += v
-				}
-				frequency = total / float64(len(pastFrequencies))
+				since := time.Now().Sub(update)
+				delta := float64(since.Nanoseconds()) / float64(f.SampleRate.Nanoseconds())
+				displayFreq = oldFreq + delta*(frequency-oldFreq)
 			}
 
 			// Calculate the corresponding hue for the colour
 			var hue float64
-			if frequency > f.MaxUsefulFrequency {
-				hue = f.UsefulFrequencyHue + (f.TotalHues-f.UsefulFrequencyHue)*(frequency/f.MaxFreq)
+			if displayFreq > f.MaxUsefulFrequency {
+				hue = f.UsefulFrequencyHue + (f.TotalHues-f.UsefulFrequencyHue)*(displayFreq/f.MaxFreq)
 			} else {
-				hue = frequency / f.MaxUsefulFrequency * f.UsefulFrequencyHue
+				hue = displayFreq / f.MaxUsefulFrequency * f.UsefulFrequencyHue
 			}
 
 			// Create the colour
