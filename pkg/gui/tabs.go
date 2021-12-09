@@ -10,9 +10,8 @@ import (
 	"currents/pkg/session"
 )
 
-func createTabs(th *material.Theme, w *app.Window, gradients *audio.Gradients) simple.Tabs {
+func createTabs(th *material.Theme, w *app.Window, gradients *audio.Gradients, server *session.Server) simple.Tabs {
 	drawMode := audio.Blended
-	server := session.NewServer()
 	// Redrawing happens outside a frame event so we need to call
 	// window.Invalidate instead of using op.InvalidateOp
 	v := complex.NewVisualisation(gradients, func() { w.Invalidate() }, &drawMode, server)
