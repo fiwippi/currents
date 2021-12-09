@@ -4,7 +4,7 @@ Currents changes the colour of your LED lights based on audio playing
 on your device
 
 ## Setup
-## Overview
+### Overview
 Currents drives an arduino connected to your computer via USB based 
 on the audio playing from one of your given microphones. The arduino 
 in turn controls a set of LED lights which change colour according to 
@@ -12,7 +12,7 @@ the audio's frequency. To visualise audio from your computer it's
 expected you create some sort of loopback device (i.e. a virtual audio 
 cable) which will be recognised as a microphone.
 
-## Requirements
+### Requirements
 Your audio device must support:
 - 2 Channels
 - 441000 Hz Sample Rate
