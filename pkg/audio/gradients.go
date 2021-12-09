@@ -6,8 +6,6 @@ import (
 	"sync"
 )
 
-var empty = Gradient{}
-
 type Gradients struct {
 	m    sync.Mutex
 	data map[string]Gradient
