@@ -77,10 +77,10 @@ func NewFFT(conf *Config) (*FFT, error) {
 		TotalHues:          320,
 		UsefulFrequencyHue: 310,
 		Damp:               true,
-		DampSliceLen:       4,
+		DampSliceLen:       2,
 		Smooth:             true,
-		SmoothAlpha:        0.65,
-		SampleRate:         75 * time.Millisecond,
+		SmoothAlpha:        0.7,
+		SampleRate:         10 * time.Millisecond,
 	}
 	go f.start()
 	return f, nil
@@ -110,8 +110,10 @@ func (f *FFT) start() {
 	var frequency float64   // The max frequency of the current buffer
 	var oldFreq float64     // The max frequency of the previous buffer
 
+	pastFrequencies := make([]float64, f.DampSliceLen) // Holds past max frequencies
+	pastIndex := 0                                     // Index for pastFrequencies to update the last position without shifting the array
+
 	rate := time.NewTicker(f.SampleRate)
-	var update time.Time
 
 	for {
 		select {
@@ -137,7 +139,6 @@ func (f *FFT) start() {
 			// updated instantaneously
 			select {
 			case <-rate.C:
-				update = time.Now()
 				// Get all the float values for each sample in the input samples
 				monoFrameCount := len(buf) / (channelNum * sampleSizeInBytes) // We mix down the samples into mono so we lose half the frames
 				samples := make([]float32, 0, monoFrameCount)
@@ -157,13 +158,15 @@ func (f *FFT) start() {
 					samples = append(samples, mixedFloat)
 				}
 
-				// Calculate variables used to get the FFT
-				maxInfo := sampleRate / channelNum                  // Reversing the Nyquist–Shannon sampling theorem to see the maximum frequency we are trying to achieve
-				usefulMonoFrameCount := monoFrameCount / channelNum // This is the length the program uses to find the freq with
+				// Reversing the Nyquist–Shannon sampling theorem to see the maximum frequency we are trying to achieve
+				maxInfo := sampleRate / channelNum
+				// This is the length the program uses to find the freq with
 				// the highest magnitude, this is half the buffer length because
 				// the FFT is mirrored along the centre, thus only half the length
 				// needs to be used
-				freqBinSize := maxInfo / usefulMonoFrameCount // This represents the difference in frequency between each index of the FFT'd array
+				usefulMonoFrameCount := monoFrameCount / channelNum
+				// This represents the difference in frequency between each index of the FFT'd array
+				freqBinSize := maxInfo / usefulMonoFrameCount
 
 				// Perform the FFT on the samples and get the frequency with the largest magnitude
 				fftData := fft.FFTReal(samples)
@@ -194,9 +197,15 @@ func (f *FFT) start() {
 
 			// Damp if needed
 			if f.Damp {
-				since := time.Now().Sub(update)
-				delta := float64(since.Nanoseconds()) / float64(f.SampleRate.Nanoseconds())
-				displayFreq = oldFreq + delta*(frequency-oldFreq)
+				pastFrequencies[pastIndex] = frequency
+				pastIndex += 1
+				pastIndex = pastIndex % len(pastFrequencies)
+
+				var total float64
+				for _, v := range pastFrequencies {
+					total += v
+				}
+				frequency = total / float64(len(pastFrequencies))
 			}
 
 			// Calculate the corresponding hue for the colour

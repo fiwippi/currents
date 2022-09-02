@@ -16,7 +16,7 @@ func loadGradients() *audio.Gradients {
 	gradients := audio.NewGradients()
 	gradients.Add("Piercing", audio.Gradient{
 		{audio.MustParseHex("#1152cb"), 0.0},
-		{audio.MustParseHex("#1152cb"), 0.05},
+		{audio.MustParseHex("#1152cb"), 0.1},
 		{audio.MustParseHex("#e4032f"), 0.17482},
 		{audio.MustParseHex("#f6c507"), 0.83449},
 		{audio.MustParseHex("#faf6cb"), 1.0},
