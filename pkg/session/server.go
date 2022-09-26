@@ -2,7 +2,6 @@ package session
 
 import (
 	"encoding/binary"
-	"fmt"
 
 	"github.com/lucasb-eyer/go-colorful"
 	"go.bug.st/serial"
@@ -35,12 +34,12 @@ func (s *Server) Connect(port string) error {
 				return
 			}
 
-			buf := make([]byte, 4)
+			buf := make([]byte, 8)
 			_, err = s.port.Read(buf)
 			if err != nil {
 				continue
 			}
-			log.Trace().Bytes("buf", buf).Uint32("val", binary.BigEndian.Uint32(buf)).Msg("arduino buffer")
+			log.Debug().Bytes("buf", buf).Uint8("val", buf[0]).Msg("arduino buffer")
 		}
 	}()
 
@@ -54,20 +53,28 @@ func (s *Server) Disconnect() error {
 
 	if s.port != nil {
 		s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
+		s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
+		s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
 		return s.port.Close()
 	}
 	return nil
 }
 
 func (s *Server) SendColour(clr colorful.Color) {
-	// Get components in range 0-255
-	r, g, b := clr.RGB255()
+	if s.port == nil {
+		return
+	}
 
-	// Send over the serial port
-	s.SendString("-1,") // Signal start of new colour
-	s.SendString(fmt.Sprintf("%d,", r))
-	s.SendString(fmt.Sprintf("%d,", g))
-	s.SendString(fmt.Sprintf("%d,", b))
+	var packed uint64
+	packed += 0xAA << 56
+	packed += 0xBB << 48
+	packed += uint64(packColour(clr)) << 16
+	packed += 0xCC << 8
+	packed += 0xDD
+
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, packed)
+	s.port.Write(buf)
 }
 
 func (s *Server) SendString(data string) error {
@@ -77,4 +84,15 @@ func (s *Server) SendString(data string) error {
 
 	_, err := s.port.Write([]byte(data))
 	return err
+}
+
+func packColour(clr colorful.Color) uint32 {
+	r, g, b := clr.RGB255()
+
+	var packed uint32
+	packed += uint32(r) << 16
+	packed += uint32(g) << 8
+	packed += uint32(b)
+
+	return packed
 }
