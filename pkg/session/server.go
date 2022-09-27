@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/lucasb-eyer/go-colorful"
 	"go.bug.st/serial"
@@ -14,11 +15,7 @@ type Server struct {
 }
 
 func NewServer() *Server {
-	return &Server{}
-}
-
-func (s *Server) Running() bool {
-	return s.port != nil
+	return &Server{port: fakePort{}}
 }
 
 func (s *Server) Connect(port string) error {
@@ -26,11 +23,14 @@ func (s *Server) Connect(port string) error {
 	if err != nil {
 		return err
 	}
+	if temp == nil {
+		return fmt.Errorf("returned port is nil")
+	}
 	s.port = temp
 
 	go func() {
 		for {
-			if s.port == nil {
+			if s.port == (fakePort{}) {
 				return
 			}
 
@@ -48,36 +48,31 @@ func (s *Server) Connect(port string) error {
 
 func (s *Server) Disconnect() error {
 	defer func() {
-		s.port = nil
+		s.port = fakePort{}
 	}()
 
-	if s.port != nil {
-		// TODO better way to close and stop colours? wait for an ack with timeout?
-		s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
-		s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
-		s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
-		return s.port.Close()
-	}
-	return nil
+	// TODO better way to close and stop colours? wait for an ack with timeout?
+	s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
+	s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
+	s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
+	return s.port.Close()
 }
 
-// TODO mutexes with the ports
-
 func (s *Server) SendColour(clr colorful.Color) {
-	if s.port == nil {
-		return
-	}
-
-	var packed uint64
-	packed += 0xAA << 56
-	packed += 0xBB << 48
-	packed += uint64(packColour(clr)) << 16
-	packed += 0xCC << 8
-	packed += 0xDD
-
 	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, packed)
+	binary.BigEndian.PutUint64(buf, markColour(packColour(clr)))
 	s.port.Write(buf)
+}
+
+func markColour(clr uint32) uint64 {
+	var marked uint64
+	marked += 0xAA << 56
+	marked += 0xBB << 48
+	marked += uint64(clr) << 16
+	marked += 0xCC << 8
+	marked += 0xDD
+
+	return marked
 }
 
 func packColour(clr colorful.Color) uint32 {
