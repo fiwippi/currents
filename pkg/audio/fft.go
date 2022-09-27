@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"math/cmplx"
@@ -35,13 +36,6 @@ type FFT struct {
 	Gradient *Gradient
 	// Whether the hue colour change should be damped
 	Damp bool
-	// How many past frequencies are taken into account when damping
-	DampSliceLen int
-	// Whether the hue colour change should be smoothed
-	Smooth bool
-	// How strong should the smoothing be from 0 <= alpha < 1,
-	// at other values the smoothing behaviour is undefined
-	SmoothAlpha float64
 	// FFT will clamp the maximum frequency to this value
 	MaxFreq float64
 	// The upper range of frequencies the program considers useful.
@@ -56,6 +50,9 @@ type FFT struct {
 	UsefulFrequencyHue float64
 	// How often we want to use the values from the audio buffer
 	SampleRate time.Duration
+
+	// Ticker for the sample rate
+	ticker *time.Ticker
 }
 
 func NewFFT(conf *Config) (*FFT, error) {
@@ -66,7 +63,7 @@ func NewFFT(conf *Config) (*FFT, error) {
 	}
 
 	f := &FFT{
-		buffer:             bytes.NewBuffer(nil),
+		buffer:             bytes.NewBuffer(make([]byte, 0)),
 		abortChan:          make(chan error),
 		conf:               conf,
 		DrawMode:           Blended,
@@ -77,10 +74,7 @@ func NewFFT(conf *Config) (*FFT, error) {
 		TotalHues:          320,
 		UsefulFrequencyHue: 310,
 		Damp:               true,
-		DampSliceLen:       2,
-		Smooth:             true,
-		SmoothAlpha:        0.7,
-		SampleRate:         10 * time.Millisecond,
+		SampleRate:         250 * time.Millisecond,
 	}
 	go f.start()
 	return f, nil
@@ -94,8 +88,17 @@ func MustCreateNewFFT(conf *Config) *FFT {
 	return f
 }
 
+func (f *FFT) ChangeSampleRate(d time.Duration) {
+	if f.ticker != nil {
+		f.ticker.Reset(d)
+	}
+}
+
 // Write implements io.Writer
 func (f *FFT) Write(p []byte) (n int, err error) {
+	if f.buffer == nil {
+		return 0, fmt.Errorf("internal buffer is nil")
+	}
 	return f.buffer.Write(p)
 }
 
@@ -104,27 +107,25 @@ func (f *FFT) start() {
 	sampleRate := int(f.conf.SampleRate)
 
 	buf := make([]byte, 0, 1024*8)
-	reader := bufio.NewReader(f.buffer)
 
 	var displayFreq float64 // Interpolated frequency displayed on the LED lights
 	var frequency float64   // The max frequency of the current buffer
 	var oldFreq float64     // The max frequency of the previous buffer
 
-	pastFrequencies := make([]float64, f.DampSliceLen) // Holds past max frequencies
-	pastIndex := 0                                     // Index for pastFrequencies to update the last position without shifting the array
+	var update time.Time // Time when the fft was last calculated
 
-	rate := time.NewTicker(f.SampleRate)
+	f.ticker = time.NewTicker(f.SampleRate)
 
 	for {
 		select {
 		case err := <-f.abortChan:
 			close(f.Hues)
-			rate.Stop()
+			f.ticker.Stop()
 			f.Done <- err
 			return
 		default:
 			// Populate the buffer
-			n, err := fill(reader, buf)
+			n, err := fill(bufio.NewReader(f.buffer), buf)
 			buf = buf[:n]
 			if err != nil && err != io.ErrUnexpectedEOF {
 				if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -138,7 +139,9 @@ func (f *FFT) start() {
 			// Frequency only updated every delta t, colour
 			// updated instantaneously
 			select {
-			case <-rate.C:
+			case <-f.ticker.C:
+				update = time.Now()
+
 				// Get all the float values for each sample in the input samples
 				monoFrameCount := len(buf) / (channelNum * sampleSizeInBytes) // We mix down the samples into mono so we lose half the frames
 				samples := make([]float32, 0, monoFrameCount)
@@ -185,11 +188,6 @@ func (f *FFT) start() {
 
 				oldFreq = frequency
 				frequency = math.Min(float64(freqBinSize*index), f.MaxFreq)
-
-				// Smooth if needed
-				if f.Smooth {
-					frequency = (f.SmoothAlpha * oldFreq) + ((1 - f.SmoothAlpha) * frequency)
-				}
 			default:
 			}
 
@@ -197,15 +195,9 @@ func (f *FFT) start() {
 
 			// Damp if needed
 			if f.Damp {
-				pastFrequencies[pastIndex] = frequency
-				pastIndex += 1
-				pastIndex = pastIndex % len(pastFrequencies)
-
-				var total float64
-				for _, v := range pastFrequencies {
-					total += v
-				}
-				frequency = total / float64(len(pastFrequencies))
+				since := time.Now().Sub(update)
+				delta := float64(since.Nanoseconds()) / float64(f.SampleRate.Nanoseconds())
+				displayFreq = oldFreq + (math.Sqrt(delta))*(frequency-oldFreq)
 			}
 
 			// Calculate the corresponding hue for the colour

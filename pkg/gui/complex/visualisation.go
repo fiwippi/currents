@@ -2,6 +2,7 @@ package complex
 
 import (
 	"image"
+	"time"
 
 	"gioui.org/layout"
 	"gioui.org/op"
@@ -31,6 +32,8 @@ type Visualisation struct {
 	currentDevice   string
 	currentGradient string
 	started         bool
+	drawMode        *audio.InterpolateMode
+	defaultDamp     float32
 
 	// Session
 	session *session.Server
@@ -40,10 +43,10 @@ type Visualisation struct {
 	stopBtn           widget.Clickable
 	gradientsCombobox xgio.Combo
 	devicesCombobox   xgio.Combo
-	smoothCheckbox    widget.Bool
 	dampCheckbox      widget.Bool
 	drawModes         widget.Enum
-	drawMode          *audio.InterpolateMode
+	dampSlider        widget.Float
+	dampReset         widget.Clickable
 }
 
 func NewVisualisation(gradients *audio.Gradients, redraw func(), drawMode *audio.InterpolateMode, server *session.Server) *Visualisation {
@@ -78,12 +81,13 @@ func NewVisualisation(gradients *audio.Gradients, redraw func(), drawMode *audio
 
 	// Create the fft context and start waiting for colours to input
 	v.fft = audio.MustCreateNewFFT(v.audioConfig)
-	v.smoothCheckbox.Value = v.fft.Smooth
 	v.dampCheckbox.Value = v.fft.Damp
 	g := v.gradients.Get(v.gradientsCombobox.SelectedText())
 	v.fft.Gradient = &g
 	v.fft.DrawMode = *drawMode
 	v.drawModes.Value = drawMode.String()
+	v.dampSlider.Value = float32(v.fft.SampleRate.Milliseconds())
+	v.defaultDamp = v.dampSlider.Value
 
 	go func() {
 	loop:
@@ -142,9 +146,27 @@ func (v *Visualisation) Layout(th *material.Theme) layout.Widget {
 					layout.Rigid(material.H6(th, "Device:").Layout),
 					layout.Rigid(xmaterial.Combo(th, &v.devicesCombobox).Layout),
 					layout.Rigid(layout.Spacer{Height: unit.Dp(10)}.Layout),
-					layout.Rigid(material.H6(th, "Options:").Layout),
-					layout.Rigid(material.CheckBox(th, &v.smoothCheckbox, "Smooth the colour change").Layout),
-					layout.Rigid(material.CheckBox(th, &v.dampCheckbox, "Damp the colour change").Layout),
+					layout.Rigid(material.H6(th, "Damping:").Layout),
+					layout.Rigid(material.CheckBox(th, &v.dampCheckbox, "On/Off").Layout),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						if !(v.dampCheckbox.Value) {
+							gtx = gtx.Disabled()
+						}
+						return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+							layout.Flexed(1, material.Slider(th, &v.dampSlider, 1, 600).Layout),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.UniformInset(unit.Dp(8)).Layout(gtx,
+									material.Body2(th, "Strength").Layout,
+								)
+							}),
+						)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						if !(v.dampCheckbox.Value) {
+							gtx = gtx.Disabled()
+						}
+						return material.Button(th, &v.dampReset, "Reset Damping").Layout(gtx)
+					}),
 				)
 			},
 		)
@@ -215,13 +237,18 @@ func (v *Visualisation) handleLogic() {
 	}
 
 	// Options
-	if v.smoothCheckbox.Changed() {
-		v.fft.Smooth = v.smoothCheckbox.Value
-		log.Debug().Bool("value", v.fft.Smooth).Msg("fft smooth changed")
-	}
 	if v.dampCheckbox.Changed() {
 		v.fft.Damp = v.dampCheckbox.Value
-		log.Debug().Bool("value", v.fft.Damp).Msg("fft damp changed")
+		log.Debug().Bool("value", v.fft.Damp).Msg("fft damp toggled changed")
+	}
+	if v.dampSlider.Changed() {
+		v.fft.ChangeSampleRate(time.Duration(v.dampSlider.Value) * time.Millisecond)
+		log.Debug().Float32("value", v.dampSlider.Value).Msg("fft damp value changed")
+	}
+	if v.dampReset.Clicked() {
+		v.dampSlider.Value = v.defaultDamp
+		v.fft.ChangeSampleRate(time.Duration(v.dampSlider.Value) * time.Millisecond)
+		log.Debug().Float32("value", v.dampSlider.Value).Msg("fft damp reset")
 	}
 }
 

@@ -52,6 +52,7 @@ func (s *Server) Disconnect() error {
 	}()
 
 	if s.port != nil {
+		// TODO better way to close and stop colours? wait for an ack with timeout?
 		s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
 		s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
 		s.SendColour(colorful.Color{R: 0, G: 0, B: 0})
@@ -59,6 +60,8 @@ func (s *Server) Disconnect() error {
 	}
 	return nil
 }
+
+// TODO mutexes with the ports
 
 func (s *Server) SendColour(clr colorful.Color) {
 	if s.port == nil {
@@ -75,15 +78,6 @@ func (s *Server) SendColour(clr colorful.Color) {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, packed)
 	s.port.Write(buf)
-}
-
-func (s *Server) SendString(data string) error {
-	if s.port == nil {
-		return nil
-	}
-
-	_, err := s.port.Write([]byte(data))
-	return err
 }
 
 func packColour(clr colorful.Color) uint32 {
