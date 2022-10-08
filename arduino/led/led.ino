@@ -1,13 +1,15 @@
 #include <FastLED.h>
 
 #define DATA_PIN    7
-#define BRIGHTNESS  10
+#define BRIGHTNESS  120
 #define LED_TYPE    WS2812B
 #define COLOR_ORDER GRB
 #define NUM_LEDS    300
 
 uint8_t buf[8]; 
 CRGB leds[NUM_LEDS];
+
+char endSeq[] = {0xCC, 0xDD};
 
 void setup() {
   delay(3000); // 3 second delay for recovery
@@ -17,7 +19,8 @@ void setup() {
 
   // set master brightness control
   FastLED.setBrightness(BRIGHTNESS);
-  
+
+  Serial.setTimeout(5);
   Serial.begin(9600);
 }
 
@@ -47,24 +50,9 @@ void loop() {
             }
             FastLED.show();  
           } else if (buf[0] == 0xCC || buf[0] == 0xDD) {
-            serial_flush();
+            Serial.write(255);
+            while (!Serial.find(endSeq)) {Serial.write(254);};
           }
         }
       }
-}
-
-void serial_flush(void) {
- while (true)
-   {
-   //delay (20);  // give data a chance to arrive
-   if (Serial.available ())
-     {
-     // we received something, get all of it and discard it
-     while (Serial.available ())
-       Serial.read ();
-     continue;  // stay in the main loop
-     }
-  else
-    break;  // nothing arrived for 20 ms
-   }
 }
