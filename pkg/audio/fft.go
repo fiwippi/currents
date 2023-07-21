@@ -34,7 +34,7 @@ type FFT struct {
 	// Gradient to interpolate colours with, if this is not specified
 	// then colours are interpolated over the HSV spectrum
 	Gradient *Gradient
-	// Whether the hue colour change should be damped
+	// Whether the hue colour change should be dampened
 	Damp bool
 	// FFT will clamp the maximum frequency to this value
 	MaxFreq float64
@@ -42,7 +42,7 @@ type FFT struct {
 	// After this barrier, the colour changes very slowly in relation
 	// to change in f
 	MaxUsefulFrequency float64
-	// How many unique shoes should the colour spectrum have
+	// How many unique hues should the colour spectrum have
 	TotalHues float64
 	// The hue number at which the MaxUsefulFrequency is reached,
 	// e.g. from 200 total hues, after 180 hues MaxUsefulFrequency
